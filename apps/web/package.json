@@ -1,0 +1,36 @@
+{
+  "name": "@chess/web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun server.ts",
+    "build": "next build",
+    "start": "NODE_ENV=production bun server.ts",
+    "clean": "rm -rf .next dist"
+  },
+  "dependencies": {
+    "@chess/shared": "workspace:*",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "three": "^0.172.0",
+    "@react-three/fiber": "^9.0.4",
+    "@react-three/drei": "^9.121.0",
+    "zustand": "^5.0.3",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
+    "chess.js": "^1.0.0-beta.8",
+    "nanoid": "^5.0.9",
+    "drizzle-orm": "^0.38.0",
+    "@neondatabase/serverless": "^0.10.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "@types/three": "^0.172.0",
+    "@types/node": "^22.0.0",
+    "drizzle-kit": "^0.30.0",
+    "typescript": "^5.7.3"
+  }
+}
