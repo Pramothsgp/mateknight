@@ -46,9 +46,13 @@ export function Pieces() {
 
       if (!PieceComponent) continue;
 
+      // White pieces need 180° Y rotation so they face the black side
+      const rotation: [number, number, number] = piece.color === "w" ? [0, Math.PI, 0] : [0, 0, 0];
+
       pieces.push(
         <AnimatedPiece key={`${piece.color}${piece.type}-${square}`} targetPosition={[x, 0, z]}>
           <group
+            rotation={rotation}
             onClick={(e) => {
               e.stopPropagation();
               handleSquareClick(square);

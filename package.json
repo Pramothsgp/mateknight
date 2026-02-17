@@ -11,5 +11,9 @@
   "devDependencies": {
     "turbo": "^2.4.4",
     "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "@react-three/postprocessing": "^3.0.4",
+    "postprocessing": "^6.38.2"
   }
 }
