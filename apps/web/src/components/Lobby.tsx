@@ -2,22 +2,26 @@
 
 import { useState, useEffect } from "react";
 import { useGameStore } from "@/store/game-store";
-import { getSocket } from "@/services/socket-service";
+import { initSocket } from "@/services/socket-service";
 
 export function Lobby() {
   const [playerName, setPlayerName] = useState("");
   const [joinRoomId, setJoinRoomId] = useState("");
   const [error, setError] = useState("");
+  const [initError, setInitError] = useState("");
 
   const phase = useGameStore((s) => s.phase);
   const roomId = useGameStore((s) => s.roomId);
   const connected = useGameStore((s) => s.connected);
+  const socketError = useGameStore((s) => s.socketError);
   const createRoom = useGameStore((s) => s.createRoom);
   const joinRoom = useGameStore((s) => s.joinRoom);
 
   // Initialize socket connection
   useEffect(() => {
-    getSocket();
+    initSocket().catch((err) => {
+      setInitError(err instanceof Error ? err.message : "Failed to connect");
+    });
   }, []);
 
   const handleCreate = () => {
@@ -47,7 +51,13 @@ export function Lobby() {
       <div style={styles.card}>
         <h1 style={styles.title}>3D Chess</h1>
         <p style={styles.subtitle}>
-          {connected ? "Connected" : "Connecting..."}
+          {connected
+            ? "Connected"
+            : initError
+              ? `Error: ${initError}`
+              : socketError
+                ? `Error: ${socketError}`
+                : "Connecting..."}
         </p>
 
         {phase === "waiting" && roomId ? (

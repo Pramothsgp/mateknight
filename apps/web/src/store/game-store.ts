@@ -15,9 +15,16 @@ import { Chess } from "chess.js";
 
 export type Phase = "lobby" | "waiting" | "playing";
 
+export interface MoveInfo {
+  to: Square;
+  isCapture: boolean;
+  path: Square[]; // intermediate squares for sliding pieces
+}
+
 interface GameStore {
   // Connection
   connected: boolean;
+  socketError: string | null;
   setConnected: (connected: boolean) => void;
 
   // Room
@@ -34,6 +41,7 @@ interface GameStore {
   // UI
   selectedSquare: Square | null;
   legalMoves: Square[];
+  legalMoveInfos: MoveInfo[];
   pendingMove: boolean;
   promotionPending: { from: Square; to: Square } | null;
 
@@ -57,13 +65,51 @@ interface GameStore {
   onOpponentReconnected: (playerName: string) => void;
 }
 
-function getLegalMovesForSquare(fen: string, square: Square): Square[] {
+function getSquareBetween(from: Square, to: Square): Square[] {
+  const files = "abcdefgh";
+  const f1 = files.indexOf(from[0]);
+  const r1 = parseInt(from[1]);
+  const f2 = files.indexOf(to[0]);
+  const r2 = parseInt(to[1]);
+
+  const df = Math.sign(f2 - f1);
+  const dr = Math.sign(r2 - r1);
+  const steps = Math.max(Math.abs(f2 - f1), Math.abs(r2 - r1));
+
+  if (steps <= 1) return [];
+
+  const path: Square[] = [];
+  for (let i = 1; i < steps; i++) {
+    const f = f1 + df * i;
+    const r = r1 + dr * i;
+    path.push(files[f] + r);
+  }
+  return path;
+}
+
+const SLIDING_PIECES = new Set(["b", "r", "q"]);
+
+function getLegalMoveInfos(fen: string, square: Square): { moves: Square[]; infos: MoveInfo[] } {
   try {
     const chess = new Chess(fen);
-    const moves = chess.moves({ square: square as any, verbose: true });
-    return moves.map((m) => m.to);
+    const piece = chess.get(square as any);
+    const verboseMoves = chess.moves({ square: square as any, verbose: true });
+
+    const moves: Square[] = [];
+    const infos: MoveInfo[] = [];
+
+    for (const m of verboseMoves) {
+      const isCapture = !!m.captured;
+      const isSliding = piece && SLIDING_PIECES.has(piece.type);
+      const path = isCapture && isSliding ? getSquareBetween(m.from, m.to) : [];
+
+      moves.push(m.to);
+      infos.push({ to: m.to, isCapture, path });
+    }
+
+    return { moves, infos };
   } catch {
-    return [];
+    return { moves: [], infos: [] };
   }
 }
 
@@ -80,6 +126,7 @@ function isPromotionMove(fen: string, from: Square, to: Square): boolean {
 export const useGameStore = create<GameStore>((set, get) => ({
   // Connection
   connected: false,
+  socketError: null,
   setConnected: (connected) => set({ connected }),
 
   // Room
@@ -96,18 +143,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // UI
   selectedSquare: null,
   legalMoves: [],
+  legalMoveInfos: [],
   pendingMove: false,
   promotionPending: null,
 
   // Actions
   createRoom: (playerName) => {
-    const socket = getSocket();
-    socket.emit(ClientEvents.CREATE_ROOM, { playerName });
+    try {
+      const socket = getSocket();
+      socket.emit(ClientEvents.CREATE_ROOM, { playerName });
+    } catch { /* socket not ready */ }
   },
 
   joinRoom: (roomId, playerName) => {
-    const socket = getSocket();
-    socket.emit(ClientEvents.JOIN_ROOM, { roomId, playerName });
+    try {
+      const socket = getSocket();
+      socket.emit(ClientEvents.JOIN_ROOM, { roomId, playerName });
+    } catch { /* socket not ready */ }
   },
 
   handleSquareClick: (square) => {
@@ -135,7 +187,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         from: state.selectedSquare,
         to: square,
       });
-      set({ selectedSquare: null, legalMoves: [], pendingMove: true });
+      set({ selectedSquare: null, legalMoves: [], legalMoveInfos: [], pendingMove: true });
       return;
     }
 
@@ -143,10 +195,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const chess = new Chess(fen);
     const piece = chess.get(square as any);
     if (piece && piece.color === state.playerColor) {
-      const moves = getLegalMovesForSquare(fen, square);
-      set({ selectedSquare: square, legalMoves: moves });
+      const { moves, infos } = getLegalMoveInfos(fen, square);
+      set({ selectedSquare: square, legalMoves: moves, legalMoveInfos: infos });
     } else {
-      set({ selectedSquare: null, legalMoves: [] });
+      set({ selectedSquare: null, legalMoves: [], legalMoveInfos: [] });
     }
   },
 
@@ -161,7 +213,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       to: state.promotionPending.to,
       promotion: piece,
     });
-    set({ promotionPending: null, selectedSquare: null, legalMoves: [], pendingMove: true });
+    set({ promotionPending: null, selectedSquare: null, legalMoves: [], legalMoveInfos: [], pendingMove: true });
   },
 
   cancelPromotion: () => {
@@ -188,6 +240,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       phase: "playing",
       selectedSquare: null,
       legalMoves: [],
+      legalMoveInfos: [],
       pendingMove: false,
     });
   },
@@ -198,6 +251,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       pendingMove: false,
       selectedSquare: null,
       legalMoves: [],
+      legalMoveInfos: [],
     });
   },
 
@@ -208,7 +262,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   onGameOver: (_status, _winner, _reason) => {
     // gameState will be updated via moveConfirmed, just clear pending
-    set({ pendingMove: false, selectedSquare: null, legalMoves: [] });
+    set({ pendingMove: false, selectedSquare: null, legalMoves: [], legalMoveInfos: [] });
   },
 
   onStateSync: (gameState, players, yourColor) => {

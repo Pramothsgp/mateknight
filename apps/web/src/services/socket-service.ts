@@ -1,6 +1,6 @@
 "use client";
 
-import { io, Socket } from "socket.io-client";
+import type { Socket } from "socket.io-client";
 import type { ClientToServerEvents, ServerToClientEvents } from "@chess/shared";
 import { ServerEvents } from "@chess/shared";
 import { useGameStore } from "@/store/game-store";
@@ -8,13 +8,32 @@ import { useGameStore } from "@/store/game-store";
 type TypedSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 let socket: TypedSocket | null = null;
+let connectionError: string | null = null;
+
+export function getConnectionError(): string | null {
+  return connectionError;
+}
+
+export async function initSocket(): Promise<TypedSocket> {
+  if (socket) return socket;
+
+  try {
+    const { io } = await import("socket.io-client");
+    socket = io({
+      transports: ["polling", "websocket"],
+    });
+    registerListeners(socket);
+    connectionError = null;
+    return socket;
+  } catch (err) {
+    connectionError = err instanceof Error ? err.message : "Failed to init socket";
+    throw err;
+  }
+}
 
 export function getSocket(): TypedSocket {
   if (!socket) {
-    socket = io(window.location.origin, {
-      transports: ["websocket", "polling"],
-    });
-    registerListeners(socket);
+    throw new Error("Socket not initialized. Call initSocket() first.");
   }
   return socket;
 }
@@ -30,7 +49,8 @@ function registerListeners(socket: TypedSocket) {
   const store = useGameStore.getState;
 
   socket.on("connect", () => {
-    useGameStore.setState({ connected: true });
+    connectionError = null;
+    useGameStore.setState({ connected: true, socketError: null });
     console.log("[Socket] Connected:", socket!.id);
   });
 
@@ -40,6 +60,8 @@ function registerListeners(socket: TypedSocket) {
   });
 
   socket.on("connect_error", (err) => {
+    connectionError = err.message;
+    useGameStore.setState({ socketError: err.message });
     console.error("[Socket] Connection error:", err.message);
   });
 
