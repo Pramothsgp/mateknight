@@ -33,7 +33,7 @@ steps:
       - "8080"
       - "--session-affinity"
       - "--max-instances"
-      - "5"
+      - "2"
       - "--memory"
       - "512Mi"
       - "--cpu"

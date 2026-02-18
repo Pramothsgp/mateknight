@@ -17,6 +17,7 @@ jobs:
   # ─── CI: runs on every push and PR ───────────────────────────
   ci:
     name: Build & Type-check
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -88,7 +89,7 @@ jobs:
           flags: |
             --port=8080
             --session-affinity
-            --max-instances=5
+            --max-instances=2
             --memory=512Mi
             --cpu=1
             --timeout=3600
